@@ -1,0 +1,11 @@
+{
+  "name": "Mapenzi Connect",
+  "description": "East Africa's premier respectful dating platform for Uganda, Kenya, Tanzania, and Rwanda featuring phone OTP auth, cultural filters, Respect swipes, chaperone mode, and Airtel Money & MTN MoMo.",
+  "requestFramePermissions": [
+    "geolocation",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
