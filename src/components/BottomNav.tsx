@@ -1,97 +1,102 @@
 import React from 'react';
-import { Compass, Heart, Calendar, MessageCircle, User } from 'lucide-react';
-import { SupportedLanguage, NavigationTab } from '../types';
-import { UI_TRANSLATIONS } from '../data/mockData';
-
-export type NavTab = NavigationTab;
+import { Home, Zap, Calendar as CalendarIcon, Crown, User } from 'lucide-react';
+import { AppTab } from '../types';
 
 interface BottomNavProps {
-  currentTab: NavigationTab;
-  onSelectTab?: (tab: NavigationTab) => void;
-  onTabChange?: (tab: NavigationTab) => void;
-  currentLang?: SupportedLanguage;
-  unreadCount?: number;
-  likesCount?: number;
+  currentTab: AppTab;
+  onSelectTab: (tab: AppTab) => void;
+  liveCount: number;
 }
 
-export const BottomNav: React.FC<BottomNavProps> = ({
-  currentTab,
-  onSelectTab,
-  onTabChange,
-  currentLang = 'en',
-  unreadCount = 0,
-  likesCount = 0,
-}) => {
-  const t = UI_TRANSLATIONS[currentLang] || UI_TRANSLATIONS.en;
-
-  const handleTabClick = (tabId: NavigationTab) => {
-    if (typeof onSelectTab === 'function') {
-      onSelectTab(tabId);
-    }
-    if (typeof onTabChange === 'function') {
-      onTabChange(tabId);
-    }
-  };
-
-  const tabs: Array<{ id: NavigationTab; label: string; icon: React.ReactNode; badge?: number }> = [
-    {
-      id: 'discover',
-      label: t.discovering || 'Discover',
-      icon: <Compass className="w-5 h-5" />,
-    },
-    {
-      id: 'likes',
-      label: t.likes || 'Likes',
-      icon: <Heart className="w-5 h-5" />,
-      badge: likesCount > 0 ? likesCount : undefined,
-    },
-    {
-      id: 'chat',
-      label: t.chat || 'Chat',
-      icon: <MessageCircle className="w-5 h-5" />,
-      badge: unreadCount > 0 ? unreadCount : undefined,
-    },
-    {
-      id: 'profile',
-      label: t.profile || 'Profile',
-      icon: <User className="w-5 h-5" />,
-    },
-  ];
-
+export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, liveCount }) => {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-30 bg-stone-900/95 backdrop-blur-lg border-t border-amber-900/30 text-stone-300 py-1.5 px-2 sm:px-4">
-      <div className="max-w-md mx-auto flex items-center justify-around">
-        {tabs.map((tab) => {
-          const isActive = currentTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              id={`nav-tab-${tab.id}`}
-              onClick={() => handleTabClick(tab.id)}
-              className={`relative flex flex-col items-center py-1 px-2.5 rounded-xl transition-all duration-150 ${
-                isActive
-                  ? 'text-amber-400 scale-105 font-bold'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              <div className="relative">
-                {tab.icon}
-                {tab.badge !== undefined && tab.badge > 0 && (
-                  <span className="absolute -top-1 -right-2.5 bg-red-600 text-white text-[10px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
-                    {tab.badge}
-                  </span>
-                )}
-              </div>
-              <span className="text-[11px] mt-1 font-medium tracking-tight">
-                {tab.label}
+    <nav className="fixed bottom-0 inset-x-0 z-40 bg-[#090514]/95 backdrop-blur-md border-t border-purple-900/40 transition-colors">
+      <div className="max-w-md mx-auto grid grid-cols-5 h-16 px-1">
+        {/* Tab 1: Home Dashboard (Matches Screenshot) */}
+        <button
+          onClick={() => onSelectTab('home')}
+          className={`flex flex-col items-center justify-center gap-1 transition-all ${
+            currentTab === 'home'
+              ? 'text-purple-400 font-bold'
+              : 'text-slate-500 hover:text-slate-300 font-medium'
+          }`}
+        >
+          <div className="relative">
+            <Home className={`w-5 h-5 ${currentTab === 'home' ? 'stroke-[2.5] text-purple-400 drop-shadow-[0_0_6px_rgba(168,85,247,0.7)]' : ''}`} />
+          </div>
+          <span className="text-[10px] tracking-tight">Home</span>
+        </button>
+
+        {/* Tab 2: Live Match Analysis */}
+        <button
+          onClick={() => onSelectTab('today')}
+          className={`flex flex-col items-center justify-center gap-1 transition-all ${
+            currentTab === 'today'
+              ? 'text-amber-400 font-bold'
+              : 'text-slate-500 hover:text-slate-300 font-medium'
+          }`}
+        >
+          <div className="relative">
+            <Zap className={`w-5 h-5 ${currentTab === 'today' ? 'stroke-[2.5] fill-amber-400 text-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.7)]' : ''}`} />
+            {liveCount > 0 && (
+              <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-full text-[8px] font-black bg-cyan-500 text-slate-950 animate-pulse">
+                {liveCount}
               </span>
-              {isActive && (
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-0.5" />
-              )}
-            </button>
-          );
-        })}
+            )}
+          </div>
+          <span className="text-[10px] tracking-tight">Analysis</span>
+        </button>
+
+        {/* Tab 3: Performance Calendar */}
+        <button
+          onClick={() => onSelectTab('calendar')}
+          className={`flex flex-col items-center justify-center gap-1 transition-all ${
+            currentTab === 'calendar'
+              ? 'text-emerald-400 font-bold'
+              : 'text-slate-500 hover:text-slate-300 font-medium'
+          }`}
+        >
+          <div className="relative">
+            <CalendarIcon className={`w-5 h-5 ${currentTab === 'calendar' ? 'stroke-[2.5] text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.7)]' : ''}`} />
+          </div>
+          <span className="text-[10px] tracking-tight">Calendar</span>
+        </button>
+
+        {/* Tab 4: Exclusive VIP */}
+        <button
+          onClick={() => onSelectTab('vip')}
+          className={`flex flex-col items-center justify-center gap-1 transition-all ${
+            currentTab === 'vip'
+              ? 'text-amber-300 font-bold'
+              : 'text-slate-500 hover:text-slate-300 font-medium'
+          }`}
+        >
+          <div className="relative">
+            <Crown className={`w-5 h-5 ${currentTab === 'vip' ? 'stroke-[2.5] fill-amber-400 text-amber-300 drop-shadow-[0_0_6px_rgba(251,191,36,0.7)]' : ''}`} />
+            <span className="absolute -top-1.5 -right-2 px-1 py-0.2 rounded-full text-[7px] font-black bg-amber-400 text-slate-950 uppercase">
+              VIP
+            </span>
+          </div>
+          <span className="text-[10px] tracking-tight">VIP Tips</span>
+        </button>
+
+        {/* Tab 5: Profile / UGX 15k Mobile Money */}
+        <button
+          onClick={() => onSelectTab('profile')}
+          className={`flex flex-col items-center justify-center gap-1 transition-all ${
+            currentTab === 'profile'
+              ? 'text-cyan-400 font-bold'
+              : 'text-slate-500 hover:text-slate-300 font-medium'
+          }`}
+        >
+          <div className="relative">
+            <User className={`w-5 h-5 ${currentTab === 'profile' ? 'stroke-[2.5] text-cyan-400 drop-shadow-[0_0_6px_rgba(6,182,212,0.7)]' : ''}`} />
+          </div>
+          <span className="text-[10px] tracking-tight">Profile</span>
+        </button>
       </div>
     </nav>
   );
 };
+
+

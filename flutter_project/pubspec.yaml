@@ -1,0 +1,39 @@
+name: zinna_tips
+description: "Zinna Tips - Light, High-Accuracy AI Football & Basketball Predictions for Android"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Firebase Core & Firestore for storing user subscription & trial
+  firebase_core: ^3.8.1
+  firebase_auth: ^5.3.4
+  cloud_firestore: ^5.5.1
+
+  # HTTP & Networking
+  http: ^1.2.2
+  
+  # Local storage for low-end device offline caching (<20MB footprint)
+  shared_preferences: ^2.3.3
+  
+  # State management & UI
+  provider: ^6.1.2
+  intl: ^0.19.0
+  google_fonts: ^6.2.1
+  flutter_spinkit: ^5.2.1
+  url_launcher: ^6.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icons/

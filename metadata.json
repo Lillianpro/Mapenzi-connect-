@@ -1,10 +1,7 @@
 {
-  "name": "Mapenzi Connect",
-  "description": "East Africa's premier respectful dating platform for Uganda, Kenya, Tanzania, and Rwanda featuring phone OTP auth, cultural filters, Respect swipes, chaperone mode, and Airtel Money & MTN MoMo.",
-  "requestFramePermissions": [
-    "geolocation",
-    "microphone"
-  ],
+  "name": "Zinna Tips",
+  "description": "Light, ultra-fast AI football and basketball predictions for Uganda and East Africa featuring 7-day free trial, MTN & Airtel Uganda Mobile Money, live scores, and downloadable mobile APK.",
+  "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]

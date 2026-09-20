@@ -1,0 +1,33 @@
+{
+  "id": "/",
+  "name": "Mapenzi Connect - East African Dating",
+  "short_name": "Mapenzi",
+  "description": "East Africa's premier respectful dating platform for Uganda, Kenya, Tanzania, and Rwanda with phone OTP, Respect matching, and Airtel Money VIP.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#FF6B35",
+  "background_color": "#0c0a09",
+  "categories": ["dating", "social", "lifestyle"],
+  "icons": [
+    {
+      "src": "/app_icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app_icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app_icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

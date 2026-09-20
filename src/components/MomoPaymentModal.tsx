@@ -1,504 +1,511 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Sparkles, CheckCircle2, ArrowRight, ShieldCheck, X, Smartphone, 
-  Copy, Check, Heart, Handshake, Zap, Info, Shield, Award 
+  Lock, 
+  ShieldCheck, 
+  Check, 
+  Phone, 
+  ArrowRight, 
+  Loader2, 
+  X, 
+  Globe, 
+  CreditCard,
+  Smartphone,
+  ChevronDown,
+  Copy,
+  MessageCircle,
+  Clock,
+  AlertCircle,
+  Sparkles,
+  ExternalLink
 } from 'lucide-react';
-import { SupportedLanguage } from '../types';
+import { UserSubscription } from '../types';
+import { 
+  detectCountryFromProfile, 
+  getCountryConfig, 
+  ALL_SUPPORTED_COUNTRIES, 
+  CountryCode, 
+  CountryPaymentConfig,
+  PaymentProvider
+} from '../utils/countryCurrency';
 
-interface MomoPaymentModalProps {
+export interface MomoPaymentModalProps {
   isOpen: boolean;
-  onClose: () => void;
-  onSuccess: (provider: string, amount: number, currency: string) => void;
-  defaultPhone?: string;
+  onClose?: () => void;
+  user: UserSubscription | null;
+  onSubscribe: (provider: string, currency?: string, amount?: number, country?: string) => Promise<boolean>;
+  isLocked: boolean;
 }
 
 export const MomoPaymentModal: React.FC<MomoPaymentModalProps> = ({
   isOpen,
   onClose,
-  onSuccess,
-  defaultPhone = '+256703320730',
+  user,
+  onSubscribe,
+  isLocked,
 }) => {
-  // Plan: weekly (15,000 UGX) or monthly (40,000 UGX)
-  const [plan, setPlan] = useState<'weekly' | 'monthly'>('monthly');
-  // Provider: Airtel Money (Primary) or MTN Mobile Money
-  const [provider, setProvider] = useState<'Airtel Money' | 'MTN Mobile Money'>('Airtel Money');
-  
-  const [phone, setPhone] = useState(defaultPhone);
-  const [transactionId, setTransactionId] = useState('');
-  const [step, setStep] = useState<'details' | 'verifying' | 'success'>('details');
+  // Automatically detect user's country from profile
+  const detectedConfig = detectCountryFromProfile(user);
+  const [selectedCountryCode, setSelectedCountryCode] = useState<CountryCode>(detectedConfig.code);
+  const [activeConfig, setActiveConfig] = useState<CountryPaymentConfig>(detectedConfig);
+  const [selectedProvider, setSelectedProvider] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [ussdStep, setUssdStep] = useState<string | null>(null);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [copiedNumber, setCopiedNumber] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [receiptData, setReceiptData] = useState<{
-    amount: number;
-    currency: string;
-    ref: string;
-    message: string;
-  } | null>(null);
+  const [mtnNoticeOpen, setMtnNoticeOpen] = useState(false);
+
+  // Sync when user prop updates or changes
+  useEffect(() => {
+    const updated = detectCountryFromProfile(user);
+    setSelectedCountryCode(updated.code);
+    setActiveConfig(updated);
+  }, [user]);
+
+  // When country code changes, update activeConfig and reset selected provider
+  useEffect(() => {
+    const config = getCountryConfig(selectedCountryCode);
+    setActiveConfig(config);
+    if (config.providers.length > 0) {
+      setSelectedProvider(config.providers[0].name);
+    }
+  }, [selectedCountryCode]);
 
   if (!isOpen) return null;
 
-  const currentAmount = plan === 'weekly' ? 15000 : 40000;
-  const currency = 'UGX';
-
-  const handleCopyAirtelNumber = () => {
-    navigator.clipboard.writeText('0703320730');
+  const handleCopyNumber = (num: string) => {
+    navigator.clipboard?.writeText(num);
     setCopiedNumber(true);
     setTimeout(() => setCopiedNumber(false), 2500);
   };
 
-  const handleFillDemoTxId = () => {
-    const demoId = 'TX' + Math.floor(100000000 + Math.random() * 900000000);
-    setTransactionId(demoId);
-    setErrorMessage('');
-  };
-
-  const handleVerifyAndActivate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (provider === 'Airtel Money' && !transactionId.trim()) {
-      setErrorMessage('Please enter the Transaction ID received from Airtel Money SMS.');
+  const handlePay = async (provider: PaymentProvider) => {
+    if (provider.isComingSoon) {
+      setMtnNoticeOpen(true);
       return;
     }
 
-    setErrorMessage('');
-    setStep('verifying');
+    setSelectedProvider(provider.name);
+    setIsProcessing(true);
 
-    try {
-      const res = await fetch('/api/payment/momo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: 'currentUser',
-          phone,
-          provider,
-          plan,
-          transactionId: transactionId.trim() || undefined,
-        }),
-      });
-      const data = await res.json();
-      
-      setTimeout(() => {
-        setReceiptData({
-          amount: data.amount || currentAmount,
-          currency: data.currency || 'UGX',
-          ref: data.transaction?.reference || transactionId || 'AIRTEL-TX-SUCCESS',
-          message: data.receiptMessage || 'Payment verified! Premium activated.',
-        });
-        setStep('success');
-      }, 1200);
-    } catch {
-      setTimeout(() => {
-        setReceiptData({
-          amount: currentAmount,
-          currency: 'UGX',
-          ref: transactionId || 'AIRTEL-TX-' + Math.floor(100000 + Math.random() * 900000),
-          message: `Payment of ${currentAmount.toLocaleString()} UGX verified to Airtel Money 0703320730 (kyomugisha - WATER HUNTERS). Premium VIP is active!`,
-        });
-        setStep('success');
-      }, 1000);
+    if (provider.recipientNumber) {
+      setUssdStep(
+        `Initiating ${provider.shortName} payment prompt (${provider.ussd}) to ${provider.recipientNumber} for ${activeConfig.formattedPrice}...`
+      );
+    } else if (provider.ussd) {
+      setUssdStep(
+        `Initiating ${provider.shortName} push prompt (${provider.ussd}) to ${user?.phone || activeConfig.samplePhone}...`
+      );
+    } else {
+      setUssdStep(`Opening secure checkout for ${activeConfig.formattedPrice} (${provider.name})...`);
+    }
+
+    const ok = await onSubscribe(
+      provider.recipientNumber ? `${provider.name} (${provider.recipientNumber})` : provider.name,
+      activeConfig.currency,
+      activeConfig.price,
+      activeConfig.code
+    );
+
+    setIsProcessing(false);
+    setUssdStep(null);
+    if (ok && onClose && !isLocked) {
+      onClose();
     }
   };
 
-  const handleDone = () => {
-    onSuccess(provider, currentAmount, currency);
-    onClose();
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in overflow-y-auto">
-      <div className="w-full max-w-lg bg-stone-900 border-2 border-amber-500/70 rounded-3xl p-5 sm:p-6 shadow-2xl text-stone-100 my-auto relative">
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-stone-800 hover:bg-stone-700 text-stone-400 hover:text-white flex items-center justify-center transition-colors"
-          title="Close"
-        >
-          <X className="w-5 h-5" />
-        </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white dark:bg-[#110b26] w-full max-w-md rounded-3xl p-5 sm:p-6 shadow-2xl border border-slate-200 dark:border-purple-900/60 relative overflow-hidden text-slate-900 dark:text-white max-h-[92vh] overflow-y-auto">
+        {/* Close button only allowed if not hard-locked */}
+        {!isLocked && onClose && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-1.5 rounded-full text-slate-400 hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition z-10"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
 
-        {/* Modal Header with Mapenzi Logo */}
-        <div className="flex items-center gap-3 border-b border-stone-800 pb-3 mb-4">
-          <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-lg border border-amber-500/50 shrink-0 bg-stone-950">
-            <img 
-              src="/app_icon.png" 
-              alt="Mapenzi Connect" 
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
+        {/* Lock & Header */}
+        <div className="text-center space-y-2 mb-4">
+          <div className="w-12 h-12 bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+            <Lock className="w-6 h-6" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
-                Mapenzi Connect VIP
-              </h2>
-              <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-600 to-red-600 text-white text-[10px] font-black uppercase tracking-wider shadow-sm">
-                Premium
-              </span>
+          
+          <h2 className="text-xl font-black tracking-tight">
+            Trial Ended.
+          </h2>
+          
+          {/* Dynamic headline updated according to detected currency */}
+          <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">
+            {activeConfig.headline}
+          </p>
+
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
+            Your 7-day free trial has concluded. Re-activate all daily football & basketball AI predictions with 85%+ accuracy.
+          </p>
+        </div>
+
+        {/* COUNTRY AUTO-DETECTION & SELECTOR BAR */}
+        <div className="mb-4 p-2.5 rounded-2xl bg-slate-100 dark:bg-purple-950/40 border border-slate-200 dark:border-purple-800/40">
+          <div className="flex items-center justify-between text-xs mb-1.5">
+            <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300 font-semibold">
+              <Globe className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Country & Currency:</span>
             </div>
-            <p className="text-xs text-amber-300 font-medium">
-              Uganda • Kenya • Tanzania • Rwanda
-            </p>
+            <button
+              type="button"
+              onClick={() => setShowCountryPicker(!showCountryPicker)}
+              className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+            >
+              <span>Change</span>
+              <ChevronDown className={`w-3 h-3 transition-transform ${showCountryPicker ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+
+          {/* Current Active Selection pill */}
+          <div className="flex items-center justify-between bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-slate-200 dark:border-purple-900/50 shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-lg leading-none">{activeConfig.flag}</span>
+              <div>
+                <span className="text-xs font-bold block">{activeConfig.name}</span>
+                <span className="text-[10px] text-slate-400">
+                  {user?.phone ? `Detected from phone (${user.phone})` : 'System Auto-Detected'}
+                </span>
+              </div>
+            </div>
+            <span className="text-xs font-black font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-500/30">
+              {activeConfig.currency}
+            </span>
+          </div>
+
+          {/* Expandable Country Switcher Grid */}
+          {showCountryPicker && (
+            <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-purple-800/40 grid grid-cols-2 sm:grid-cols-3 gap-1.5 animate-in slide-in-from-top-1">
+              {ALL_SUPPORTED_COUNTRIES.map((c) => {
+                const isSelected = c.code === selectedCountryCode;
+                return (
+                  <button
+                    key={c.code}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCountryCode(c.code);
+                      setShowCountryPicker(false);
+                    }}
+                    className={`p-2 rounded-xl text-left flex items-center gap-2 transition border ${
+                      isSelected
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-bold'
+                        : 'bg-white/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <span className="text-base">{c.flag}</span>
+                    <div className="truncate">
+                      <span className="text-xs block truncate">{c.currency}</span>
+                      <span className="text-[10px] text-slate-400 block truncate">{c.formattedPrice}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Dynamic Pricing Plan Display */}
+        <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border-2 border-emerald-500/70 mb-4 flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">
+              VIP Full Access ({activeConfig.flag} {activeConfig.name})
+            </span>
+            <div className="text-2xl font-black text-slate-900 dark:text-white font-mono mt-0.5">
+              {activeConfig.formattedPrice}{' '}
+              <span className="text-xs font-normal text-slate-500 font-sans">{activeConfig.perPeriod}</span>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-600 text-white font-bold inline-block shadow-xs">
+              {activeConfig.paymentType === 'momo' ? 'Instant MoMo' : 'Instant Card / $'}
+            </span>
+            <span className="block text-[10px] text-slate-400 mt-0.5">30-day validity</span>
           </div>
         </div>
 
-        {step === 'details' && (
-          <form onSubmit={handleVerifyAndActivate} className="space-y-4">
-            {/* PRICING TIER SELECTOR: Weekly 15,000 UGX / Monthly 40,000 UGX */}
-            <div>
-              <label className="block text-xs font-bold text-stone-300 mb-1.5 uppercase tracking-wider">
-                1. Select VIP Duration & Pricing
-              </label>
-              <div className="grid grid-cols-2 gap-2.5">
-                {/* Weekly Plan */}
-                <button
-                  type="button"
-                  id="plan-weekly-btn"
-                  onClick={() => setPlan('weekly')}
-                  className={`p-3 rounded-2xl border text-left transition-all relative ${
-                    plan === 'weekly'
-                      ? 'bg-gradient-to-br from-amber-950/90 to-red-950/80 border-amber-400 ring-2 ring-amber-500/50 shadow-md'
-                      : 'bg-stone-800/80 border-stone-700 text-stone-400 hover:bg-stone-800'
-                  }`}
-                >
-                  <div className="flex justify-between items-start">
-                    <span className="text-xs font-extrabold text-white">Weekly Pass</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-700 text-stone-300 font-semibold">
-                      7 Days
-                    </span>
-                  </div>
-                  <div className="mt-1 text-lg font-black text-amber-400 font-mono">
-                    15,000 <span className="text-xs font-normal text-stone-300">UGX</span>
-                  </div>
-                  <div className="text-[10px] text-stone-400 mt-0.5">
-                    Fast connection trial
-                  </div>
-                </button>
+        {/* Value Prop List */}
+        <div className="bg-slate-50 dark:bg-slate-900/60 rounded-2xl p-3 space-y-2 mb-4 border border-slate-100 dark:border-slate-800 text-xs">
+          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+            <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span className="font-semibold">VIP 1X2 Games (4 games) & Double Chance (6 games)</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+            <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span className="font-semibold">HT/FT Draw (2 games) & Full-Time Draw (2 games)</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+            <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span className="font-semibold">Correct Score of the Day (high return odds)</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+            <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span className="font-semibold">Over/Under 2.5 Goals (4 games)</span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+            <Check className="w-4 h-4 text-amber-500 shrink-0" />
+            <span className="font-bold text-amber-600 dark:text-amber-400">
+              Odd 2++, Odd 5++, Odd 15++, and Mega Odd 50 Slips
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+            <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span>Copyable booking codes (BetPawa, 1XBet, SportyBet)</span>
+          </div>
+        </div>
 
-                {/* Monthly Plan */}
-                <button
-                  type="button"
-                  id="plan-monthly-btn"
-                  onClick={() => setPlan('monthly')}
-                  className={`p-3 rounded-2xl border text-left transition-all relative ${
-                    plan === 'monthly'
-                      ? 'bg-gradient-to-br from-amber-950/90 to-red-950/80 border-amber-400 ring-2 ring-amber-500/50 shadow-md'
-                      : 'bg-stone-800/80 border-stone-700 text-stone-400 hover:bg-stone-800'
-                  }`}
-                >
-                  <span className="absolute -top-2.5 right-2 px-2 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-black uppercase tracking-wider shadow-sm">
-                    Best Value
-                  </span>
-                  <div className="flex justify-between items-start">
-                    <span className="text-xs font-extrabold text-white">Monthly VIP</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-700 text-stone-300 font-semibold">
-                      30 Days
-                    </span>
-                  </div>
-                  <div className="mt-1 text-lg font-black text-amber-400 font-mono">
-                    40,000 <span className="text-xs font-normal text-stone-300">UGX</span>
-                  </div>
-                  <div className="text-[10px] text-emerald-400 font-semibold mt-0.5">
-                    Save 20,000 UGX vs weekly
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* PAYMENT METHOD SELECTION */}
-            <div>
-              <label className="block text-xs font-bold text-stone-300 mb-1.5 uppercase tracking-wider">
-                2. Choose Mobile Payment Method
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {/* Airtel Money Button */}
-                <button
-                  type="button"
-                  id="select-airtel-btn"
-                  onClick={() => setProvider('Airtel Money')}
-                  className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                    provider === 'Airtel Money'
-                      ? 'bg-red-950/90 border-red-500 text-white ring-2 ring-red-500/50 shadow-md'
-                      : 'bg-stone-800 border-stone-700 text-stone-400 hover:bg-stone-750'
-                  }`}
-                >
-                  <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                  <span>Airtel Money (*185#)</span>
-                  <span className="text-[9px] bg-red-600/30 text-red-300 px-1.5 py-0.5 rounded font-mono">Primary</span>
-                </button>
-
-                {/* MTN MoMo Button */}
-                <button
-                  type="button"
-                  id="select-mtn-btn"
-                  onClick={() => setProvider('MTN Mobile Money')}
-                  className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                    provider === 'MTN Mobile Money'
-                      ? 'bg-yellow-950/80 border-yellow-500 text-white ring-2 ring-yellow-500/50 shadow-md'
-                      : 'bg-stone-800 border-stone-700 text-stone-400 hover:bg-stone-750'
-                  }`}
-                >
-                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
-                  <span>MTN MoMo (*165#)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* VERY IMPORTANT: AIRTEL MONEY SPECIFIC INSTRUCTIONS & RECIPIENT */}
-            {provider === 'Airtel Money' ? (
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-red-950/80 via-stone-900 to-amber-950/70 border-2 border-red-500/80 shadow-xl space-y-3">
-                <div className="flex items-center justify-between border-b border-red-900/50 pb-2">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-red-300">
-                    <Smartphone className="w-4 h-4 text-red-400" />
-                    <span>Airtel Money Payment Details</span>
-                  </div>
-                  <span className="text-[11px] font-black text-amber-300 font-mono">
-                    {currentAmount.toLocaleString()} UGX
-                  </span>
-                </div>
-
-                {/* THE CORE MANDATED PROMINENT NUMBER & NAME */}
-                <div className="p-3 rounded-xl bg-black/60 border border-red-500/40 text-center space-y-1">
-                  <div className="text-[11px] text-stone-300 font-medium">
-                    Pay to Airtel Money:
-                  </div>
-                  <div className="text-xl sm:text-2xl font-black text-white tracking-wider font-mono flex items-center justify-center gap-2">
-                    <span className="text-red-400">+256</span> 0703320730
-                    <button
-                      type="button"
-                      id="copy-airtel-number-btn"
-                      onClick={handleCopyAirtelNumber}
-                      className="p-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs transition-transform active:scale-95"
-                      title="Copy Number"
-                    >
-                      {copiedNumber ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <div className="text-xs font-bold text-amber-300">
-                    Account Name: <span className="text-white">kyomugisha - WATER HUNTERS</span>
-                  </div>
-                  {copiedNumber && (
-                    <div className="text-[10px] text-emerald-400 font-semibold animate-pulse">
-                      ✓ Number 0703320730 copied to clipboard!
+        {/* Processing State */}
+        {isProcessing ? (
+          <div className="py-6 text-center space-y-3 rounded-2xl bg-slate-900/80 border border-slate-800">
+            <Loader2 className="w-8 h-8 text-emerald-500 animate-spin mx-auto" />
+            <p className="text-xs font-semibold text-slate-100">
+              {ussdStep}
+            </p>
+            <p className="text-[11px] text-slate-400">
+              Awaiting network authorization... Please confirm on your mobile handset.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* SPECIAL DEDICATED AIRTEL MONEY & MTN NOTICE FOR UGANDA */}
+            {activeConfig.code === 'UG' && (
+              <div className="space-y-3">
+                {/* Official Airtel Money Payment Card */}
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-50 to-red-50 dark:from-red-950/30 dark:to-slate-900 border-2 border-red-500/60 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-red-600 text-white font-black text-[11px] flex items-center justify-center">
+                        AIR
+                      </span>
+                      <span className="text-xs font-bold text-red-700 dark:text-red-400 uppercase tracking-wider">
+                        Official Airtel Money Payment
+                      </span>
                     </div>
-                  )}
-                </div>
-
-                {/* Clear instructions */}
-                <div className="text-[11px] text-stone-300 space-y-1 bg-stone-900/70 p-2.5 rounded-xl border border-stone-800">
-                  <div className="font-bold text-amber-400 mb-1 flex items-center gap-1">
-                    <Info className="w-3.5 h-3.5" />
-                    <span>Instructions:</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                      Active
+                    </span>
                   </div>
-                  <p>
-                    1. Dial <strong className="text-white">*185#</strong> on Airtel or open Airtel Money App.
-                  </p>
-                  <p>
-                    2. Send money to <strong className="text-white">0703320730</strong> (Confirm name: <strong className="text-amber-300">kyomugisha - WATER HUNTERS</strong>).
-                  </p>
-                  <p>
-                    3. Send <strong className="text-white">{currentAmount.toLocaleString()} UGX</strong> ({plan === 'weekly' ? 'Weekly' : 'Monthly'}).
-                  </p>
-                  <p>
-                    4. Enter your <strong>Transaction ID</strong> from the confirmation SMS below to activate Premium.
-                  </p>
-                </div>
 
-                {/* TRANSACTION ID INPUT */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-bold text-stone-200">
-                      Enter Airtel Transaction ID:
-                    </label>
+                  {/* Payment Number Highlight */}
+                  <div className="bg-white dark:bg-slate-900/90 rounded-xl p-3 border border-red-200 dark:border-red-900/50 flex items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">
+                        Payment Recipient Number:
+                      </span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <Phone className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                        <span className="text-base sm:text-lg font-black font-mono tracking-tight text-slate-900 dark:text-white">
+                          +256703320730
+                        </span>
+                      </div>
+                    </div>
                     <button
                       type="button"
-                      onClick={handleFillDemoTxId}
-                      className="text-[10px] text-amber-400 hover:underline font-semibold"
+                      onClick={() => handleCopyNumber('+256703320730')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs ${
+                        copiedNumber
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-red-600 hover:bg-red-700 text-white'
+                      }`}
                     >
-                      Auto-fill sample ID
+                      {copiedNumber ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy</span>
+                        </>
+                      )}
                     </button>
                   </div>
-                  <input
-                    id="airtel-tx-id-input"
-                    type="text"
-                    value={transactionId}
-                    onChange={(e) => {
-                      setTransactionId(e.target.value);
-                      setErrorMessage('');
-                    }}
-                    placeholder="e.g. 1248981249 or TX982341..."
-                    className="w-full bg-stone-800 border border-stone-700 focus:border-red-500 rounded-xl py-2.5 px-3 text-stone-100 text-sm font-mono focus:outline-none"
-                  />
-                  {errorMessage && (
-                    <p className="text-[11px] text-red-400 font-semibold mt-1">
-                      {errorMessage}
+
+                  {/* Step-by-step instructions */}
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-1 bg-red-50/50 dark:bg-red-950/20 p-2.5 rounded-xl border border-red-100 dark:border-red-900/30">
+                    <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                      <Smartphone className="w-3.5 h-3.5 text-red-600" />
+                      <span>How to pay via Airtel Money:</span>
+                    </div>
+                    <p>1. Dial <strong className="font-mono text-red-700 dark:text-red-400">*185#</strong> on Airtel Uganda.</p>
+                    <p>2. Choose <strong>Send Money</strong> & enter number <strong className="font-mono font-bold text-red-700 dark:text-red-300">0703320730</strong>.</p>
+                    <p>3. Enter amount <strong className="font-mono font-bold text-slate-900 dark:text-white">UGX 15,000</strong> & your Airtel PIN.</p>
+                  </div>
+
+                  {/* Quick Action Buttons */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const airtel = activeConfig.providers.find((p) => p.id === 'Airtel Money') || activeConfig.providers[0];
+                        handlePay(airtel);
+                      }}
+                      className="py-2.5 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition active:scale-[0.99]"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>Activate VIP Now</span>
+                    </button>
+                    <a
+                      href="https://wa.me/256703320730?text=Hello%20Zinna%20Tips%20Support%2C%20I%20have%20sent%20UGX%2015000%20via%20Airtel%20Money%20to%20%2B256703320730%20for%20VIP%20activation"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition active:scale-[0.99]"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      <span>WhatsApp Proof</span>
+                    </a>
+                  </div>
+                </div>
+
+                {/* MTN Money Soon Coming Banner */}
+                <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700/50 flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 mt-0.5 font-black text-xs shadow-sm">
+                    MTN
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                        MTN Mobile Money
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200 border border-amber-400 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        Soon Coming
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-800 dark:text-amber-300/90 mt-1 leading-relaxed">
+                      MTN money is soon coming. In the meantime, please complete your VIP subscription via <strong>Airtel Money (+256703320730)</strong> above or contact WhatsApp support.
                     </p>
-                  )}
-                </div>
-              </div>
-            ) : (
-              /* MTN MoMo OPTION (Secondary) */
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-yellow-950/60 via-stone-900 to-amber-950/70 border-2 border-yellow-500/70 shadow-xl space-y-3">
-                <div className="flex items-center justify-between border-b border-yellow-900/50 pb-2">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-yellow-300">
-                    <Smartphone className="w-4 h-4 text-yellow-400" />
-                    <span>MTN Mobile Money Details</span>
                   </div>
-                  <span className="text-[11px] font-black text-yellow-300 font-mono">
-                    {currentAmount.toLocaleString()} UGX
-                  </span>
-                </div>
-
-                <div className="p-3 rounded-xl bg-black/60 border border-yellow-500/40 text-center space-y-1">
-                  <div className="text-[11px] text-stone-300 font-medium">
-                    Pay via MTN MoMo (*165#):
-                  </div>
-                  <div className="text-lg sm:text-xl font-black text-white font-mono">
-                    Dial *165*4*4# or Send to +256703320730
-                  </div>
-                  <div className="text-xs text-stone-300">
-                    Merchant / Reference: <strong className="text-yellow-400">MAPENZI-VIP</strong>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-bold text-stone-200">
-                      Enter MTN MoMo Reference / Transaction ID:
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleFillDemoTxId}
-                      className="text-[10px] text-yellow-400 hover:underline font-semibold"
-                    >
-                      Auto-fill sample ID
-                    </button>
-                  </div>
-                  <input
-                    id="mtn-tx-id-input"
-                    type="text"
-                    value={transactionId}
-                    onChange={(e) => {
-                      setTransactionId(e.target.value);
-                      setErrorMessage('');
-                    }}
-                    placeholder="e.g. MOMO-882319"
-                    className="w-full bg-stone-800 border border-stone-700 focus:border-yellow-500 rounded-xl py-2.5 px-3 text-stone-100 text-sm font-mono focus:outline-none"
-                  />
                 </div>
               </div>
             )}
 
-            {/* VIP BENEFITS SUMMARY */}
-            <div className="p-3 rounded-xl bg-stone-800/80 border border-stone-700 space-y-1.5 text-xs text-stone-300">
-              <div className="font-bold text-amber-400 text-[11px] uppercase tracking-wider flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>VIP Perks Unlocked Instantly:</span>
+            {/* General Provider Buttons */}
+            <div className="space-y-2 pt-1">
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center">
+                {activeConfig.code === 'UG'
+                  ? 'All Uganda Payment Options'
+                  : activeConfig.paymentType === 'momo'
+                  ? `Select ${activeConfig.name} Mobile Money Carrier`
+                  : `Select International Payment Method ($ USD)`}
               </div>
-              <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                <div className="flex items-center gap-1 text-stone-200">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
-                  <span>Unlimited Daily Likes</span>
-                </div>
-                <div className="flex items-center gap-1 text-stone-200">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
-                  <span>Unblur Who Liked You</span>
-                </div>
-                <div className="flex items-center gap-1 text-stone-200">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
-                  <span>Boost in Kampala / Matuga</span>
-                </div>
-                <div className="flex items-center gap-1 text-stone-200">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
-                  <span>Unlimited Respect Swipes</span>
-                </div>
-              </div>
-            </div>
 
-            {/* SUBMIT BUTTON */}
-            <button
-              id="activate-premium-submit-btn"
-              type="submit"
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-red-600 via-orange-600 to-amber-600 hover:brightness-110 text-white font-extrabold text-sm shadow-xl flex items-center justify-center gap-2 transition-transform active:scale-98"
-            >
-              <ShieldCheck className="w-4 h-4 text-white" />
-              <span>
-                Activate VIP ({currentAmount.toLocaleString()} UGX - {plan === 'weekly' ? 'Weekly' : 'Monthly'})
-              </span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </form>
-        )}
-
-        {/* VERIFYING SPINNER STATE */}
-        {step === 'verifying' && (
-          <div className="py-12 text-center space-y-4">
-            <div className="w-16 h-16 mx-auto rounded-full border-4 border-red-500/20 border-t-red-500 animate-spin flex items-center justify-center" />
-            <div>
-              <h3 className="text-base font-bold text-white">
-                Verifying with Airtel Money...
-              </h3>
-              <p className="text-xs text-stone-400 mt-1 max-w-xs mx-auto">
-                Checking payment of {currentAmount.toLocaleString()} UGX to <strong>0703320730 (kyomugisha)</strong> with reference <strong>{transactionId || 'ID'}</strong>.
-              </p>
+              {activeConfig.providers.map((p) => {
+                const isComingSoon = p.isComingSoon;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => handlePay(p)}
+                    style={{ backgroundColor: p.color, color: p.textColor }}
+                    className={`w-full py-3 px-4 rounded-xl font-bold text-sm shadow-md flex items-center justify-between transition-transform active:scale-[0.99] hover:opacity-95 ${
+                      isComingSoon ? 'opacity-90 ring-2 ring-amber-400/50' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span 
+                        className="w-6 h-6 rounded-full font-black text-[10px] flex items-center justify-center border"
+                        style={{ 
+                          backgroundColor: p.textColor, 
+                          color: p.color,
+                          borderColor: p.textColor 
+                        }}
+                      >
+                        {p.badge || p.shortName.slice(0, 3)}
+                      </span>
+                      <div className="text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="block text-xs sm:text-sm font-bold">{p.name}</span>
+                          {p.statusBadge && (
+                            <span 
+                              className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider ${
+                                isComingSoon 
+                                  ? 'bg-amber-950 text-amber-300 border border-amber-600' 
+                                  : 'bg-emerald-950 text-emerald-300 border border-emerald-600'
+                              }`}
+                            >
+                              {p.statusBadge}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] opacity-80 block font-normal">{p.note}</span>
+                      </div>
+                    </div>
+                    {isComingSoon ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-black/30 text-white border border-white/20">
+                        Soon Coming
+                      </span>
+                    ) : (
+                      <ArrowRight className="w-4 h-4 shrink-0" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* SUCCESS RECEIPT STATE */}
-        {step === 'success' && receiptData && (
-          <div className="py-6 text-center space-y-4 animate-in zoom-in-95">
-            <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center text-emerald-400">
-              <CheckCircle2 className="w-9 h-9" />
-            </div>
-
-            <div>
-              <span className="text-[11px] font-black uppercase tracking-wider text-emerald-400">
-                Payment Verified • Premium Active
-              </span>
-              <h3 className="text-xl font-extrabold text-white mt-1">
-                Welcome to Mapenzi VIP!
+        {/* MTN Coming Soon Modal / Notice Popup */}
+        {mtnNoticeOpen && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in">
+            <div className="bg-white dark:bg-slate-900 border border-amber-500/50 rounded-2xl p-5 max-w-sm w-full text-center space-y-3 shadow-2xl">
+              <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-300 flex items-center justify-center mx-auto border border-amber-500/40">
+                <Clock className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-black text-slate-900 dark:text-white">
+                MTN Money is Soon Coming!
               </h3>
-              <p className="text-xs text-stone-300 mt-1 max-w-sm mx-auto leading-relaxed">
-                {receiptData.message}
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                Direct automated MTN Mobile Money is currently being finalized. You can easily subscribe now using <strong>Airtel Money (+256703320730)</strong>, or chat with our admin on WhatsApp.
               </p>
+              <div className="space-y-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMtnNoticeOpen(false);
+                    const airtel = activeConfig.providers.find((p) => p.id === 'Airtel Money');
+                    if (airtel) handlePay(airtel);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>Pay via Airtel Money (+256703320730)</span>
+                </button>
+                <a
+                  href="https://wa.me/256703320730?text=Hello%20Zinna%20Tips%20Support%2C%20I%20want%20to%20pay%20via%20MTN%20Mobile%20Money"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 block text-center"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  <span>Contact WhatsApp Support (+256703320730)</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setMtnNoticeOpen(false)}
+                  className="w-full py-1.5 text-xs text-slate-400 hover:text-slate-200"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
-
-            {/* Receipt Summary Card */}
-            <div className="p-3.5 rounded-2xl bg-stone-950 border border-stone-800 text-left text-xs space-y-2 max-w-sm mx-auto font-mono">
-              <div className="flex justify-between border-b border-stone-800 pb-1.5">
-                <span className="text-stone-400 font-sans">Payment Method:</span>
-                <span className="text-white font-bold">{provider}</span>
-              </div>
-              <div className="flex justify-between border-b border-stone-800 pb-1.5">
-                <span className="text-stone-400 font-sans">Paid To:</span>
-                <span className="text-amber-300 font-bold">0703320730 (kyomugisha)</span>
-              </div>
-              <div className="flex justify-between border-b border-stone-800 pb-1.5">
-                <span className="text-stone-400 font-sans">Amount:</span>
-                <span className="text-emerald-400 font-bold">{receiptData.amount.toLocaleString()} {receiptData.currency}</span>
-              </div>
-              <div className="flex justify-between border-b border-stone-800 pb-1.5">
-                <span className="text-stone-400 font-sans">Plan:</span>
-                <span className="text-white font-bold">{plan === 'weekly' ? 'Weekly Pass (7 Days)' : 'Monthly VIP (30 Days)'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-stone-400 font-sans">Transaction Ref:</span>
-                <span className="text-amber-400 font-bold">{receiptData.ref}</span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              id="close-success-payment-btn"
-              onClick={handleDone}
-              className="w-full max-w-sm mx-auto py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-bold text-sm shadow-lg flex items-center justify-center gap-2"
-            >
-              <span>Explore Unblurred Suitors & Unlimited Likes</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
           </div>
         )}
+
+        <div className="mt-4 text-center">
+          <span className="text-[10px] text-slate-400 flex items-center justify-center gap-1">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 inline" />
+            Registered phone: {user?.phone || activeConfig.samplePhone} • Carrier-grade SSL encryption
+          </span>
+        </div>
       </div>
     </div>
   );
 };
 
+export default MomoPaymentModal;

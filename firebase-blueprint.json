@@ -1,0 +1,97 @@
+{
+  "entities": {
+    "UserSubscription": {
+      "title": "UserSubscription",
+      "description": "User subscription and 7-day trial tracking in Zinna Tips",
+      "type": "object",
+      "properties": {
+        "phone": {
+          "type": "string",
+          "description": "User phone number with country code",
+          "maxLength": 20
+        },
+        "trial_start_date": {
+          "type": "string",
+          "description": "ISO timestamp when the 7-day trial started",
+          "maxLength": 64
+        },
+        "is_subscribed": {
+          "type": "boolean",
+          "description": "Whether user has an active UGX 15,000 monthly subscription"
+        },
+        "subscription_expiry": {
+          "type": "string",
+          "description": "ISO timestamp when the subscription expires",
+          "maxLength": 64
+        },
+        "plan": {
+          "type": "string",
+          "description": "Subscription plan name",
+          "maxLength": 64
+        },
+        "payment_method": {
+          "type": "string",
+          "description": "Last payment method used: MTN Mobile Money or Airtel Money",
+          "maxLength": 64
+        },
+        "device_id": {
+          "type": "string",
+          "description": "Low-end device ID or client token",
+          "maxLength": 128
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update",
+          "maxLength": 64
+        }
+      },
+      "required": ["phone", "trial_start_date", "is_subscribed"]
+    },
+    "PaymentRecord": {
+      "title": "PaymentRecord",
+      "description": "Uganda Mobile Money payment transaction log",
+      "type": "object",
+      "properties": {
+        "phone": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount in UGX (e.g. 15000)"
+        },
+        "currency": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "provider": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "reference": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "timestamp": {
+          "type": "string",
+          "maxLength": 64
+        }
+      },
+      "required": ["phone", "amount", "currency", "provider", "reference", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{phone}": {
+      "schema": "UserSubscription",
+      "description": "Subscription status and trial records indexed by phone"
+    },
+    "/payments/{paymentId}": {
+      "schema": "PaymentRecord",
+      "description": "Uganda MoMo payment history"
+    }
+  }
+}

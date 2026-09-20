@@ -1,144 +1,137 @@
-export type CountryCode = '+256' | '+254' | '+255' | '+250' | '+257';
+// Zinna Tips - Type Definitions
 
-export interface EastAfricaCountry {
-  code: CountryCode;
-  name: string;
-  flag: string;
-  currency: string;
-  carrierPrefixes: string[];
-  sampleNumber: string;
-  cities: string[];
+export type SportType = 'football' | 'basketball';
+
+export interface FixtureItem {
+  id: string;
+  sport: SportType;
+  league: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeLogo: string;
+  awayLogo: string;
+  matchTime: string;
+  status: 'upcoming' | 'live' | 'finished';
+  liveScore?: string;
+  liveMinute?: string;
+  
+  // Statistical inputs analyzed by AI
+  homeForm: string[]; // e.g. ['W', 'W', 'D', 'W', 'W']
+  awayForm: string[];
+  headToHeadSummary: string;
+  tableStanding: string;
+  injuriesReport: string;
+
+  // AI Prediction outputs
+  confidencePercent: number; // e.g. 86
+  prediction1X2: string; // '1 (Home Win)', 'X (Draw)', '2 (Away Win)'
+  doubleChance: string; // '1X', 'X2', '12'
+  overUnder: string; // 'Over 2.5', 'Under 2.5'
+  btts: string; // 'Yes', 'No'
+  
+  // Basketball markets
+  basketballWinner?: string;
+  basketballOverUnderPoints?: string;
+
+  // AI reasoning
+  whyThisPrediction: string;
 }
 
-export type SupportedLanguage = 'en' | 'sw' | 'lg' | 'rw';
-
-export type Gender = 'woman' | 'man' | 'non-binary';
-
-export type LookingFor = 'Serious Relationship' | 'Marriage' | 'Friendship' | 'Cultural Partnership';
-
-export type Religion = 'Christian' | 'Muslim' | 'Traditional' | 'Spiritual / Other';
-
-export type DowryIntention = 
-  | 'Traditional custom respected'
-  | 'Open to family negotiation'
-  | 'Symbolic / Modest'
-  | 'Not practicing dowry'
-  | 'Prefer to discuss in person';
-
-export interface UserProfile {
-  id: string;
+export interface UserSubscription {
   phone: string;
-  name: string;
-  age: number;
-  gender: Gender;
-  country: string;
-  city: string;
-  tribe: string;
-  primaryLanguage: string;
-  religion: Religion;
-  lookingFor: LookingFor;
-  dowryIntention: DowryIntention;
-  photos: string[];
-  voiceIntroUrl?: string;
-  voiceIntroDuration?: number;
-  voiceIntroTranscript?: string;
-  bio: string;
-  occupation?: string;
-  isVerified: boolean;
-  isPremium: boolean;
-  premiumExpiresAt?: string;
-  likesRemainingToday: number;
-  chaperone?: {
-    name: string;
-    relationship: string;
-    phone: string;
-    enabled: boolean;
-  };
-  distanceKm?: number;
-  createdAt: string;
-  respectPoints?: number;
-}
-
-export type SwipeType = 'pass' | 'like' | 'respect';
-
-export interface SwipePayload {
-  targetUserId: string;
-  type: SwipeType;
-  respectNote?: string;
-}
-
-export interface ChatMessage {
-  id: string;
-  matchId: string;
-  senderId: string;
-  text?: string;
-  voiceNoteUrl?: string;
-  voiceNoteDuration?: number;
-  timestamp: string;
-  translations?: Record<string, string>;
-  isChaperoneVisible?: boolean;
-}
-
-export interface MatchProfile {
-  matchId: string;
-  user: UserProfile;
-  matchedAt: string;
-  isRespectMatch: boolean;
-  respectNote?: string;
-  lastMessage?: string;
-  lastMessageTime?: string;
-  unreadCount: number;
-  chaperoneActive: boolean;
-}
-
-export interface ReportItem {
-  id: string;
-  reportedUserId: string;
-  reportedUserName: string;
-  reporterId: string;
-  reason: string;
-  details?: string;
-  status: 'pending' | 'resolved' | 'dismissed';
-  timestamp: string;
+  country?: string; // 'UG' | 'KE' | 'TZ' | 'RW' | 'OTHER'
+  currency?: string; // 'UGX' | 'KES' | 'TZS' | 'RWF' | 'USD'
+  trial_start_date: string; // ISO string
+  is_subscribed: boolean;
+  subscription_expiry?: string;
+  plan: string;
+  payment_method: string;
+  updatedAt?: string;
 }
 
 export interface MomoTransaction {
   id: string;
-  userId: string;
   phone: string;
-  provider: 'MTN Mobile Money' | 'Airtel Money' | 'M-Pesa Safaricom';
   amount: number;
   currency: string;
-  status: 'completed' | 'pending' | 'failed';
+  provider: string;
   reference: string;
+  status: 'completed' | 'pending' | 'failed';
   timestamp: string;
 }
 
-export interface LocalEvent {
+export type AppTab = 'home' | 'today' | 'vip' | 'calendar' | 'live' | 'profile' | 'code';
+
+export type VipCategory = 
+  | 'all'
+  | '1x2' 
+  | 'htft_draw' 
+  | 'ft_draw' 
+  | 'correct_score' 
+  | 'over_under' 
+  | 'double_chance'
+  | 'slips';
+
+export interface VipGame {
   id: string;
-  title: string;
-  country: string;
-  city: string;
-  district: string;
-  venue: string;
-  date: string;
+  category: '1x2' | 'htft_draw' | 'ft_draw' | 'correct_score' | 'over_under' | 'double_chance';
+  categoryLabel: string;
+  league: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeLogo: string;
+  awayLogo: string;
+  matchTime: string;
+  tip: string;
+  odds: string;
+  confidencePercent: number;
+  whyThisPrediction: string;
+  status: 'upcoming' | 'won' | 'live';
+}
+
+export interface VipOddsSlipLeg {
+  match: string;
+  league: string;
+  tip: string;
+  odds: string;
   time: string;
-  description: string;
-  attendees: number;
-  category: 'Singles Mixer' | 'Cultural Night' | 'Speed Dating' | 'Sundowner';
-  entryFee: string;
-  image?: string;
 }
 
-export interface FilterSettings {
-  country: string;
-  tribe: string;
-  religion: string;
-  minAge: number;
-  maxAge: number;
-  maxDistanceKm: number;
-  lookingFor: string;
-  dowryIntention: string;
+export interface VipOddsSlip {
+  id: string;
+  type: 'odd_2' | 'odd_5' | 'odd_15' | 'mega_50';
+  title: string;
+  tag: string;
+  totalOdds: string;
+  confidencePercent: number;
+  bookingCode: {
+    provider: 'BetPawa' | '1XBet' | 'SportyBet';
+    code: string;
+  };
+  games: VipOddsSlipLeg[];
+  summary: string;
+  sampleStakeUgx: number;
+  sampleReturnUgx: number;
 }
 
-export type NavigationTab = 'discover' | 'likes' | 'chat' | 'events' | 'profile' | 'admin';
+export interface DayPredictionResult {
+  id: string;
+  match: string;
+  league: string;
+  tip: string;
+  odds: string;
+  result: 'won' | 'lost';
+  finalScore: string;
+}
+
+export interface DayPerformance {
+  date: string; // 'YYYY-MM-DD'
+  wins: number;
+  losses: number;
+  totalPicks: number;
+  winRate: number; // percentage, e.g. 85.7
+  status: 'win' | 'mixed' | 'loss' | 'today' | 'upcoming';
+  totalOddsWon?: string;
+  highlights?: string;
+  predictions: DayPredictionResult[];
+}

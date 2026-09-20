@@ -1,259 +1,332 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
-import { DiscoverView } from './components/DiscoverView';
-import { LikesView } from './components/LikesView';
-import { ChatView } from './components/ChatView';
-import { EventsView } from './components/EventsView';
-import { ProfileView } from './components/ProfileView';
-import { AdminPanel } from './components/AdminPanel';
-import { AuthModal } from './components/AuthModal';
-import { OnboardingModal } from './components/OnboardingModal';
+import { DashboardHub } from './components/DashboardHub';
+import { TodayTab } from './components/TodayTab';
+import { VipTab } from './components/VipTab';
+import { PredictionCalendar } from './components/PredictionCalendar';
+import { LiveScoresTab } from './components/LiveScoresTab';
+import { ProfileTab } from './components/ProfileTab';
+import { NavigationDrawer } from './components/NavigationDrawer';
+import { CommunityModal } from './components/CommunityModal';
+import { PrivacyModal } from './components/PrivacyModal';
 import { MomoPaymentModal } from './components/MomoPaymentModal';
-import { PanicModal } from './components/PanicModal';
-import { ReportModal } from './components/ReportModal';
-import { 
-  UserProfile, MatchProfile, SupportedLanguage, NavigationTab, LocalEvent 
-} from './types';
-import { 
-  INITIAL_PROFILES, INITIAL_MATCHES, INITIAL_EVENTS, UI_TRANSLATIONS 
-} from './data/mockData';
-import { Handshake, Heart, Sparkles, MessageCircle, X } from 'lucide-react';
+import { PhoneAuthModal } from './components/PhoneAuthModal';
+import { DownloadApkModal } from './components/DownloadApkModal';
+import { FlutterCodeModal } from './components/FlutterCodeModal';
+import { FixtureItem, UserSubscription, AppTab, VipCategory } from './types';
+import { INITIAL_FIXTURES } from './data/sportsData';
 
 export default function App() {
-  // Global State
-  const [currentLang, setCurrentLang] = useState<SupportedLanguage>('en');
-  const [currentTab, setCurrentTab] = useState<NavigationTab>('discover');
-  const [isLowDataMode, setIsLowDataMode] = useState(false);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-
-  // User Profile
-  const [currentUser, setCurrentUser] = useState<UserProfile>({
-    id: 'user-me',
-    phone: '+256772123456',
-    name: 'Kiconco Patricia',
-    age: 24,
-    gender: 'woman',
-    country: 'Uganda',
-    city: 'Kampala',
-    district: 'Matuga / Wakiso',
-    tribe: 'Muganda',
-    language: ['Luganda', 'English'],
-    religion: 'Christian',
-    lookingFor: 'Serious Relationship',
-    bio: 'Proud Muganda woman passionate about East African literature, church choir, and traditional family harmony. Seeking a respectful partner.',
-    photos: [
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80',
-    ],
-    voiceIntroUrl: '/audio/intro-user.mp3',
-    voiceIntroDuration: 14,
-    voiceIntroTranscript: 'Oli otya nnyabo ne ssebo! Welcome to my profile. I value sincere conversation, choir, and cultural respect. Looking forward to connecting with someone special.',
-    dowryIntention: 'Traditional custom respected',
-    chaperone: {
-      name: 'Brian Kigozi (Brother)',
-      relationship: 'Brother',
-      phone: '+256701555123',
-      enabled: true,
-    },
-    isVerified: true,
-    isPremium: false,
-    likesRemainingToday: 20,
-    distanceKm: 4,
+  // Theme & Layout state
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('zinna_theme');
+    return saved ? saved === 'dark' : true; // Default to dark luxury theme as shown in screenshot
   });
 
-  const [profiles, setProfiles] = useState<UserProfile[]>(INITIAL_PROFILES);
-  const [matches, setMatches] = useState<MatchProfile[]>(INITIAL_MATCHES);
-  const [events, setEvents] = useState<LocalEvent[]>(INITIAL_EVENTS);
-  const [likesRemainingToday, setLikesRemainingToday] = useState(20);
-  const [isPremium, setIsPremium] = useState(false);
+  const [currentTab, setCurrentTab] = useState<AppTab>('home');
+  const [selectedSport, setSelectedSport] = useState<string>('all');
+  const [fixtures, setFixtures] = useState<FixtureItem[]>(INITIAL_FIXTURES);
+  const [isLoadingFixtures, setIsLoadingFixtures] = useState<boolean>(false);
+  const [selectedVipCategory, setSelectedVipCategory] = useState<VipCategory | undefined>(undefined);
 
-  // Modals
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [onboardingModalOpen, setOnboardingModalOpen] = useState(false);
-  const [momoModalOpen, setMomoModalOpen] = useState(false);
-  const [panicModalOpen, setPanicModalOpen] = useState(false);
-  const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [reportTarget, setReportTarget] = useState<UserProfile | null>(null);
-  
-  // Match celebration modal state
-  const [celebrationMatch, setCelebrationMatch] = useState<{ match: MatchProfile; isRespect: boolean } | null>(null);
+  // Modal / Drawer state
+  const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
+  const [isCommunityOpen, setIsCommunityOpen] = useState<boolean>(false);
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState<boolean>(false);
 
-  // Fetch initial profiles and matches from backend
+  // User & Subscription state
+  const [user, setUser] = useState<UserSubscription | null>(() => {
+    const saved = localStorage.getItem('zinna_user');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return null;
+      }
+    }
+    // Default demo user with active 7-day trial
+    const trialStart = new Date().toISOString();
+    return {
+      phone: '+256772123456',
+      trial_start_date: trialStart,
+      is_subscribed: false,
+      plan: '7-Day Free Trial (Active)',
+      payment_method: 'None',
+    };
+  });
+
+  // Paywall & Testing simulation state
+  const [simulateExpired, setSimulateExpired] = useState<boolean>(false);
+  const [isPaywallOpen, setIsPaywallOpen] = useState<boolean>(false);
+  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
+  const [isDownloadApkOpen, setIsDownloadApkOpen] = useState<boolean>(false);
+  const [isFlutterCodeOpen, setIsFlutterCodeOpen] = useState<boolean>(false);
+
+  // Apply dark mode class to root HTML element
   useEffect(() => {
-    fetch('/api/profiles')
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) setProfiles(data);
-      })
-      .catch(() => {});
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('zinna_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('zinna_theme', 'light');
+    }
+  }, [darkMode]);
 
-    fetch('/api/matches')
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) setMatches(data);
-      })
-      .catch(() => {});
+  // Sync user state to localStorage
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('zinna_user', JSON.stringify(user));
+    }
+  }, [user]);
 
-    fetch('/api/events')
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) setEvents(data);
-      })
-      .catch(() => {});
+  // Fetch daily fixtures from backend
+  const fetchFixtures = async () => {
+    setIsLoadingFixtures(true);
+    try {
+      const res = await fetch('/api/fixtures/today?sport=all');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.fixtures && data.fixtures.length > 0) {
+          setFixtures(data.fixtures);
+        }
+      }
+    } catch (e) {
+      console.warn('Backend fixture fetch fallback to initial data:', e);
+    } finally {
+      setIsLoadingFixtures(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFixtures();
   }, []);
 
-  // Handle Swipe Action: Like, Pass, or Respect
-  const handleSwipe = async (targetUserId: string, type: 'like' | 'pass' | 'respect', respectNote?: string) => {
-    const targetProfile = profiles.find((p) => p.id === targetUserId);
-    if (!targetProfile) return;
+  // Compute 7-day free trial remaining
+  const getTrialInfo = () => {
+    if (!user) return { daysRemaining: 7, isExpired: false };
+    if (simulateExpired) return { daysRemaining: 0, isExpired: true };
+    if (user.is_subscribed) return { daysRemaining: 30, isExpired: false };
 
-    if (type === 'like' && !isPremium) {
-      setLikesRemainingToday((prev) => Math.max(0, prev - 1));
+    const start = new Date(user.trial_start_date).getTime();
+    const now = new Date().getTime();
+    const elapsedDays = (now - start) / (1000 * 3600 * 24);
+    const isExpired = elapsedDays >= 7;
+    const daysRemaining = Math.max(0, Math.ceil(7 - elapsedDays));
+
+    return { daysRemaining, isExpired };
+  };
+
+  const { daysRemaining, isExpired } = getTrialInfo();
+  const liveCount = fixtures.filter((f) => f.status === 'live').length;
+
+  // Handle phone registration (User registers with phone number -> automatically starts 7-day free trial)
+  const handleRegister = async (phone: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/user/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        setUser(data.user);
+        setIsAuthOpen(false);
+        setSimulateExpired(false);
+        return true;
+      }
+    } catch (e) {
+      console.error(e);
     }
 
+    // Client fallback
+    const now = new Date().toISOString();
+    const newUser: UserSubscription = {
+      phone,
+      trial_start_date: now,
+      is_subscribed: false,
+      plan: '7-Day Free Trial (Active)',
+      payment_method: 'None',
+    };
+    setUser(newUser);
+    setIsAuthOpen(false);
+    setSimulateExpired(false);
+    return true;
+  };
+
+  // Handle Mobile Money & Card subscription (UGX, KES, TZS, RWF, or USD)
+  const handleSubscribe = async (
+    provider: string,
+    currency: string = 'UGX',
+    amount: number = 15000,
+    country: string = 'UG'
+  ): Promise<boolean> => {
     try {
-      const res = await fetch('/api/match', {
+      const res = await fetch('/api/user/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: currentUser.id,
-          targetUserId,
-          action: type,
-          respectNote,
+          phone: user?.phone || '+256772123456',
+          provider,
+          currency,
+          amount,
+          country,
         }),
       });
       const data = await res.json();
+      if (data.success && data.user) {
+        setUser(data.user);
+        setSimulateExpired(false);
+        setIsPaywallOpen(false);
+        return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
 
-      if (data.isMatch && data.match) {
-        setMatches((prev) => [data.match, ...prev]);
-        setCelebrationMatch({ match: data.match, isRespect: type === 'respect' });
-      }
-    } catch {
-      // Offline fallback: create local match on respect or like
-      if (type === 'respect' || type === 'like') {
-        const newMatch: MatchProfile = {
-          matchId: 'match-' + Date.now(),
-          user: targetProfile,
-          matchedAt: 'Just now',
-          isRespectMatch: type === 'respect',
-          respectNote: respectNote,
-          chaperoneActive: true,
-          lastMessage: type === 'respect' ? `Respect Note: "${respectNote}"` : 'You both liked each other!',
-          lastMessageTime: 'Just now',
-          unreadCount: 1,
-        };
-        setMatches((prev) => [newMatch, ...prev]);
-        setCelebrationMatch({ match: newMatch, isRespect: type === 'respect' });
-      }
+    // Client fallback
+    if (user) {
+      const expiry = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
+      const planDesc = `${currency} ${amount.toLocaleString()} / Month (VIP AI Access)`;
+      setUser({
+        ...user,
+        country,
+        currency,
+        is_subscribed: true,
+        subscription_expiry: expiry,
+        plan: planDesc,
+        payment_method: provider,
+      });
+      setSimulateExpired(false);
+      setIsPaywallOpen(false);
+      return true;
+    }
+    return false;
+  };
+
+  const handleUpdateUserCountry = (newCountryCode: string) => {
+    if (user) {
+      setUser({
+        ...user,
+        country: newCountryCode,
+      });
     }
   };
 
-  const handleMomoSuccess = (provider: string, amount: number, currency: string) => {
-    setIsPremium(true);
-    setCurrentUser((prev) => ({ ...prev, isPremium: true, likesRemainingToday: 9999 }));
-    setLikesRemainingToday(9999);
-    setMomoModalOpen(false);
+  const handleToggleSimulateExpired = () => {
+    setSimulateExpired(!simulateExpired);
   };
 
-  const handleAuthComplete = (phone: string, isNewUser: boolean) => {
-    setCurrentUser((prev) => ({ ...prev, phone }));
-    setAuthModalOpen(false);
-    if (isNewUser) {
-      setOnboardingModalOpen(true);
-    }
+  const handleLogout = () => {
+    localStorage.removeItem('zinna_user');
+    setUser(null);
+    setIsAuthOpen(true);
   };
 
-  const handleOnboardingComplete = (completed: UserProfile) => {
-    setCurrentUser(completed);
-    setOnboardingModalOpen(false);
-  };
+  // If user is not logged in, prompt Auth screen
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans transition-colors">
+        <PhoneAuthModal isOpen={true} onRegister={handleRegister} />
+      </div>
+    );
+  }
 
-  const unreadMatchesCount = matches.filter((m) => m.unreadCount > 0).length;
+  // Hard lock paywall if trial is expired and user hasn't subscribed
+  const shouldHardLock = isExpired && !user.is_subscribed;
 
   return (
-    <div className={`min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans selection:bg-amber-500 selection:text-black ${
-      isLowDataMode ? 'low-data-mode' : ''
-    }`}>
-      {/* Top Header with country flags, language toggle, and mode controls */}
+    <div className="min-h-screen bg-[#090514] text-slate-100 font-sans transition-colors flex flex-col selection:bg-purple-500 selection:text-white">
+      {/* Sticky App Header */}
       <Header
-        currentLang={currentLang}
-        onLanguageChange={setCurrentLang}
-        isLowDataMode={isLowDataMode}
-        onToggleLowDataMode={() => setIsLowDataMode(!isLowDataMode)}
-        onOpenPanic={() => setPanicModalOpen(true)}
-        onOpenMomo={() => setMomoModalOpen(true)}
-        onOpenAuth={() => setAuthModalOpen(true)}
-        isAdminView={currentTab === 'admin'}
-        onToggleAdminView={() => setCurrentTab(currentTab === 'admin' ? 'discover' : 'admin')}
-        onOpenAdmin={() => setCurrentTab('admin')}
-        isPremium={isPremium}
+        darkMode={darkMode}
+        setDarkMode={setDarkMode}
+        user={user}
+        trialDaysRemaining={daysRemaining}
+        isTrialExpired={isExpired}
+        onOpenMenu={() => setIsMenuOpen(true)}
+        onOpenDownloadApk={() => setIsDownloadApkOpen(true)}
+        onOpenFlutterCode={() => setIsFlutterCodeOpen(true)}
+        onOpenPaywall={() => setIsPaywallOpen(true)}
       />
 
       {/* Main Container */}
-      <main className="flex-1 w-full max-w-2xl mx-auto flex flex-col">
-        {currentTab === 'discover' && (
-          <DiscoverView
-            profiles={profiles}
-            currentLang={currentLang}
-            likesRemainingToday={likesRemainingToday}
-            isPremium={isPremium}
-            onSwipe={handleSwipe}
-            onOpenMomo={() => setMomoModalOpen(true)}
-            onReport={(target) => {
-              setReportTarget(target);
-              setReportModalOpen(true);
+      <main className="flex-1 max-w-4xl w-full mx-auto p-3 sm:p-4 md:p-6">
+        {/* Tab 1: Home Dashboard (Exact visual layout of the screenshot with custom enhancements) */}
+        {currentTab === 'home' && (
+          <DashboardHub
+            onSelectLiveAnalysis={() => setCurrentTab('today')}
+            onSelectPerformanceTracker={() => setCurrentTab('calendar')}
+            onSelectVipCategory={(cat) => {
+              setSelectedVipCategory(cat);
+              setCurrentTab('vip');
             }}
-            isLowDataMode={isLowDataMode}
+            onOpenCommunity={() => setIsCommunityOpen(true)}
+            onOpenPrivacy={() => setIsPrivacyOpen(true)}
+            selectedSport={selectedSport}
+            setSelectedSport={setSelectedSport}
+            liveMatchesCount={liveCount}
+            isSubscribed={user.is_subscribed}
+            trialDaysRemaining={daysRemaining}
           />
         )}
 
-        {currentTab === 'likes' && (
-          <LikesView
-            profiles={profiles}
-            isPremium={isPremium}
-            onOpenMomo={() => setMomoModalOpen(true)}
-            onSwipeBack={(suitor) => {
-              handleSwipe(suitor.id, 'like');
-              setCurrentTab('chat');
-            }}
-            currentLang={currentLang}
+        {/* Tab 2: Live Match Analysis */}
+        {currentTab === 'today' && (
+          <TodayTab
+            fixtures={fixtures}
+            isLoading={isLoadingFixtures}
+            selectedSport={selectedSport}
+            setSelectedSport={setSelectedSport}
+            onRefresh={fetchFixtures}
+            trialDaysRemaining={daysRemaining}
+            isSubscribed={user.is_subscribed}
+            onOpenPaywall={() => setIsPaywallOpen(true)}
+            onOpenVipTab={() => setCurrentTab('vip')}
+            user={user}
           />
         )}
 
-        {currentTab === 'chat' && (
-          <ChatView
-            matches={matches}
-            currentLang={currentLang}
-            currentUser={currentUser}
-            isLowDataMode={isLowDataMode}
-            onToggleLowDataMode={() => setIsLowDataMode(!isLowDataMode)}
+        {/* Tab 3: Performance Tracker Calendar */}
+        {currentTab === 'calendar' && (
+          <div className="space-y-4 pb-20 max-w-2xl mx-auto">
+            <PredictionCalendar />
+          </div>
+        )}
+
+        {/* Tab 4: Exclusive VIP Tips & Slips */}
+        {currentTab === 'vip' && (
+          <VipTab
+            initialCategory={selectedVipCategory}
+            isSubscribed={user.is_subscribed}
+            trialDaysRemaining={daysRemaining}
+            isTrialExpired={isExpired}
+            onOpenPaywall={() => setIsPaywallOpen(true)}
           />
         )}
 
-        {currentTab === 'events' && (
-          <EventsView
-            events={events}
-            currentLang={currentLang}
-            onOpenMomo={() => setMomoModalOpen(true)}
+        {/* Tab 5: Live Scores */}
+        {currentTab === 'live' && (
+          <LiveScoresTab
+            fixtures={fixtures}
+            onRefresh={fetchFixtures}
+            isLoading={isLoadingFixtures}
           />
         )}
 
+        {/* Tab 6: Profile & Subscription */}
         {currentTab === 'profile' && (
-          <ProfileView
-            user={currentUser}
-            currentLang={currentLang}
-            onUpdateUser={setCurrentUser}
-            onOpenMomo={() => setMomoModalOpen(true)}
-            onOpenPanic={() => setPanicModalOpen(true)}
-          />
-        )}
-
-        {currentTab === 'admin' && (
-          <AdminPanel
-            onBack={() => setCurrentTab('discover')}
-            currentLang={currentLang}
-            onLanguageChange={setCurrentLang}
+          <ProfileTab
+            user={user}
+            trialDaysRemaining={daysRemaining}
+            isTrialExpired={isExpired}
+            onOpenPaywall={() => setIsPaywallOpen(true)}
+            onToggleSimulateExpired={handleToggleSimulateExpired}
+            onOpenDownloadApk={() => setIsDownloadApkOpen(true)}
+            onOpenFlutterCode={() => setIsFlutterCodeOpen(true)}
+            onLogout={handleLogout}
+            onChangeCountry={handleUpdateUserCountry}
           />
         )}
       </main>
@@ -261,119 +334,64 @@ export default function App() {
       {/* Bottom Navigation */}
       <BottomNav
         currentTab={currentTab}
-        onTabChange={setCurrentTab}
-        onSelectTab={setCurrentTab}
-        unreadCount={unreadMatchesCount}
-        likesCount={profiles.length > 0 ? 4 : 0}
-        currentLang={currentLang}
+        onSelectTab={(tab) => {
+          if (tab === 'vip') setSelectedVipCategory(undefined);
+          setCurrentTab(tab);
+        }}
+        liveCount={liveCount}
       />
 
-      {/* MATCH CELEBRATION MODAL */}
-      {celebrationMatch && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in zoom-in-95">
-          <div className="w-full max-w-sm bg-gradient-to-b from-stone-900 to-amber-950 border-2 border-amber-500 rounded-3xl p-6 shadow-2xl text-center space-y-4">
-            <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/20 border-2 border-amber-400 flex items-center justify-center text-amber-300 animate-bounce">
-              {celebrationMatch.isRespect ? <Handshake className="w-8 h-8" /> : <Heart className="w-8 h-8 fill-red-500 text-red-500" />}
-            </div>
-
-            <div>
-              <span className="text-[11px] font-black uppercase tracking-wider text-amber-400">
-                {celebrationMatch.isRespect ? 'Honor & Respect Connected' : "It's a Mutual Match!"}
-              </span>
-              <h2 className="text-xl font-extrabold text-white mt-1">
-                You & {celebrationMatch.match.user.name}
-              </h2>
-              <p className="text-xs text-stone-300 mt-1">
-                {celebrationMatch.isRespect
-                  ? 'Your formal respect greeting was accepted with high esteem.'
-                  : 'You both expressed interest. Chat is now unlocked!'}
-              </p>
-            </div>
-
-            {/* Suitor photo preview */}
-            <div className="flex items-center justify-center gap-2">
-              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-amber-400 shadow-md">
-                <img
-                  src={currentUser.photos[0]}
-                  alt="You"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-black font-black text-xs">
-                {celebrationMatch.isRespect ? '🤝' : '❤️'}
-              </div>
-              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-amber-400 shadow-md">
-                <img
-                  src={celebrationMatch.match.user.photos[0]}
-                  alt={celebrationMatch.match.user.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2 pt-2">
-              <button
-                id="open-match-chat-btn"
-                onClick={() => {
-                  setCelebrationMatch(null);
-                  setCurrentTab('chat');
-                }}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:brightness-110 text-white font-bold text-xs shadow-lg flex items-center justify-center gap-1.5"
-              >
-                <MessageCircle className="w-4 h-4" />
-                <span>Open Respectful Chat</span>
-              </button>
-              <button
-                onClick={() => setCelebrationMatch(null)}
-                className="w-full py-2 text-stone-400 hover:text-white text-xs font-semibold"
-              >
-                Keep Exploring Singles
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ALL MODALS */}
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        onComplete={handleAuthComplete}
+      {/* Slide-out Navigation Drawer (Hamburger Menu) */}
+      <NavigationDrawer
+        isOpen={isMenuOpen}
+        onClose={() => setIsMenuOpen(false)}
+        currentTab={currentTab}
+        onNavigate={(tab) => {
+          if (tab === 'vip') setSelectedVipCategory(undefined);
+          setCurrentTab(tab);
+        }}
+        user={user}
+        trialDaysRemaining={daysRemaining}
+        isTrialExpired={isExpired}
+        darkMode={darkMode}
+        setDarkMode={setDarkMode}
+        onOpenPaywall={() => setIsPaywallOpen(true)}
+        onOpenDownloadApk={() => setIsDownloadApkOpen(true)}
+        onOpenCommunity={() => setIsCommunityOpen(true)}
+        onOpenPrivacy={() => setIsPrivacyOpen(true)}
       />
 
-      <OnboardingModal
-        isOpen={onboardingModalOpen}
-        initialProfile={currentUser}
-        onComplete={handleOnboardingComplete}
+      {/* Telegram & WhatsApp VIP Community Modal */}
+      <CommunityModal
+        isOpen={isCommunityOpen}
+        onClose={() => setIsCommunityOpen(false)}
       />
 
+      {/* Privacy Policy & Terms Modal */}
+      <PrivacyModal
+        isOpen={isPrivacyOpen}
+        onClose={() => setIsPrivacyOpen(false)}
+      />
+
+      {/* Momo Payment Modal with Automatic Country & Currency Detection */}
       <MomoPaymentModal
-        isOpen={momoModalOpen}
-        onClose={() => setMomoModalOpen(false)}
-        onSuccess={handleMomoSuccess}
-        defaultPhone={currentUser.phone}
+        isOpen={shouldHardLock || isPaywallOpen}
+        onClose={shouldHardLock ? undefined : () => setIsPaywallOpen(false)}
+        user={user}
+        onSubscribe={handleSubscribe}
+        isLocked={shouldHardLock}
       />
 
-      <PanicModal
-        isOpen={panicModalOpen}
-        onClose={() => setPanicModalOpen(false)}
-        currentUser={currentUser}
+      {/* Download APK Modal */}
+      <DownloadApkModal
+        isOpen={isDownloadApkOpen}
+        onClose={() => setIsDownloadApkOpen(false)}
       />
 
-      <ReportModal
-        isOpen={reportModalOpen}
-        targetUser={reportTarget}
-        onClose={() => {
-          setReportModalOpen(false);
-          setReportTarget(null);
-        }}
-        onSuccess={() => {
-          setReportModalOpen(false);
-          if (reportTarget) {
-            setProfiles((prev) => prev.filter((p) => p.id !== reportTarget.id));
-          }
-          setReportTarget(null);
-        }}
+      {/* Flutter Source Code Modal */}
+      <FlutterCodeModal
+        isOpen={isFlutterCodeOpen}
+        onClose={() => setIsFlutterCodeOpen(false)}
       />
     </div>
   );

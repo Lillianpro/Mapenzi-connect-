@@ -123,7 +123,14 @@ class GlobalVoicePlayer {
     }
   }
 
-  private speakGreeting(transcript?: string, gender?: 'man' | 'woman' | 'other') {
+  private speakGreeting(options: {
+    transcript?: string;
+    gender?: 'man' | 'woman' | 'other';
+    lang?: string;
+    rate?: number;
+    pitch?: number;
+  }) {
+    const { transcript, gender, lang, rate = 0.95, pitch } = options;
     if (!transcript || typeof window === 'undefined' || !('speechSynthesis' in window)) {
       return;
     }
@@ -131,20 +138,30 @@ class GlobalVoicePlayer {
     try {
       this.cancelSpeech();
       const utterance = new SpeechSynthesisUtterance(transcript);
-      utterance.rate = 0.95;
-      utterance.pitch = gender === 'woman' ? 1.2 : 0.95;
+      utterance.rate = rate;
+      utterance.pitch = pitch !== undefined ? pitch : (gender === 'woman' ? 1.15 : 0.95);
 
-      // Select natural voice if available
+      // Select voice based on requested language
       const voices = window.speechSynthesis.getVoices();
-      const preferred = voices.find(
-        (v) =>
-          v.lang.startsWith('sw') ||
-          v.lang.includes('KE') ||
-          v.lang.includes('UG') ||
-          v.lang.includes('ZA') ||
-          v.lang.includes('GB') ||
-          v.lang.includes('en')
-      );
+      let preferred: SpeechSynthesisVoice | undefined;
+
+      if (lang === 'sw') {
+        preferred = voices.find((v) => v.lang.startsWith('sw') || v.lang.includes('KE') || v.lang.includes('TZ'));
+      } else if (lang === 'rw' || lang === 'lg') {
+        preferred = voices.find((v) => v.lang.includes('UG') || v.lang.includes('RW') || v.lang.includes('ZA') || v.lang.startsWith('sw'));
+      }
+
+      if (!preferred) {
+        preferred = voices.find(
+          (v) =>
+            v.lang.includes('KE') ||
+            v.lang.includes('UG') ||
+            v.lang.includes('ZA') ||
+            v.lang.includes('GB') ||
+            v.lang.startsWith('en')
+        );
+      }
+
       if (preferred) {
         utterance.voice = preferred;
       }
@@ -166,8 +183,11 @@ class GlobalVoicePlayer {
     duration?: number;
     transcript?: string;
     gender?: 'man' | 'woman' | 'other';
+    lang?: string;
+    rate?: number;
+    pitch?: number;
   }) {
-    const { profileId, audioUrl, duration = 12, transcript, gender } = options;
+    const { profileId, audioUrl, duration = 12, transcript, gender, lang, rate, pitch } = options;
 
     // If same profile is playing, pause it
     if (this.currentProfileId === profileId && this.state.isPlaying) {
@@ -205,8 +225,8 @@ class GlobalVoicePlayer {
       }
     }
 
-    // Also speak native voice greeting
-    this.speakGreeting(transcript, gender);
+    // Also speak native/translated voice greeting
+    this.speakGreeting({ transcript, gender, lang, rate, pitch });
 
     this.startTracking();
     this.notify();
@@ -259,3 +279,70 @@ class GlobalVoicePlayer {
 }
 
 export const globalVoicePlayer = new GlobalVoicePlayer();
+
+/**
+ * Generates a lightweight, valid 16-bit mono PCM WAV audio Data URI
+ * producing warm, gentle harmonic voice-simulated audio tones
+ */
+export function generatePlayableWavDataUrl(durationSeconds: number = 8, baseFreq: number = 220): string {
+  const sampleRate = 16000;
+  const numSamples = Math.floor(sampleRate * Math.max(2, Math.min(durationSeconds, 20)));
+  const buffer = new ArrayBuffer(44 + numSamples * 2);
+  const view = new DataView(buffer);
+
+  // Helper to write ASCII strings into DataView
+  const writeString = (offset: number, string: string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+
+  // RIFF identifier
+  writeString(0, 'RIFF');
+  // RIFF chunk length
+  view.setUint32(4, 36 + numSamples * 2, true);
+  // RIFF type
+  writeString(8, 'WAVE');
+  // format chunk identifier
+  writeString(12, 'fmt ');
+  // format chunk length
+  view.setUint32(16, 16, true);
+  // sample format (raw PCM)
+  view.setUint16(20, 1, true);
+  // channel count (1 = mono)
+  view.setUint16(22, 1, true);
+  // sample rate
+  view.setUint32(24, sampleRate, true);
+  // byte rate (sampleRate * 2 bytes)
+  view.setUint32(28, sampleRate * 2, true);
+  // block align
+  view.setUint16(32, 2, true);
+  // bits per sample
+  view.setUint16(34, 16, true);
+  // data chunk identifier
+  writeString(36, 'data');
+  // data chunk length
+  view.setUint32(40, numSamples * 2, true);
+
+  // Write PCM samples: Harmonic gentle voice carrier with natural cadence envelope
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    // Cadence amplitude envelope: rises gently, subtle rhythmic breaths
+    const envelope = Math.min(1, t * 4) * Math.min(1, (durationSeconds - t) * 4) * (0.7 + 0.3 * Math.sin(2 * Math.PI * 1.8 * t));
+    // Soft harmonic overtone resembling human vocal warmth
+    const fund = Math.sin(2 * Math.PI * baseFreq * t);
+    const harmonic1 = 0.4 * Math.sin(2 * Math.PI * (baseFreq * 2) * t);
+    const harmonic2 = 0.2 * Math.sin(2 * Math.PI * (baseFreq * 3) * t);
+    const sample = Math.max(-1, Math.min(1, (fund + harmonic1 + harmonic2) * 0.35 * envelope));
+    view.setInt16(44 + i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+  }
+
+  // Convert buffer to base64
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return `data:audio/wav;base64,${btoa(binary)}`;
+}
